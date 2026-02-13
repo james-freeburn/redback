@@ -613,7 +613,7 @@ class SimulateOpticalTransient(object):
     def __init__(self, model, parameters, pointings_database=None,
                  survey='Rubin_10yr_baseline',sncosmo_kwargs=None, obs_buffer=5.0,
                  survey_fov_sqdeg=9.6,snr_threshold=5, end_transient_time=1000, add_source_noise=False,
-                 population=False, model_kwargs=None, **kwargs):
+                 population=False, model_kwargs=None, stacking_interval=None, **kwargs):
         """
         Simulate an optical transient or transient population for an optical Survey like Rubin, ZTF, Roman etc
 
@@ -641,6 +641,7 @@ class SimulateOpticalTransient(object):
         :param kwargs: Dictionary of additional kwargs
         :param source_noise: Float. Factor to multiply the model flux by to add an extra noise
                 in quadrature to the limiting mag noise. Default value is 0.02, disabled by default.
+        :param stacking_interval: Float. If not None, the observations within this interval in days will be stacked.
         """
 
         self.survey_fov_sqdeg = survey_fov_sqdeg
@@ -655,11 +656,12 @@ class SimulateOpticalTransient(object):
         self.obs_buffer = obs_buffer
         self.end_transient_time = self.t0_transient + end_transient_time
         self.add_source_noise = add_source_noise
+        self.stacking_interval = stacking_interval
 
         if isinstance(model, str):
             self.model = redback.model_library.all_models_dict[model]
             model_kwargs['output_format'] = 'sncosmo_source'
-            _time_array = np.linspace(0.1, 3000.0, 10)
+            _time_array = np.linspace(1E-5, 3000.0, 10)
             if self.population:
                 self.all_sncosmo_models = []
                 for x in range(len(self.parameters)):
@@ -673,7 +675,7 @@ class SimulateOpticalTransient(object):
                 model_kwargs['output_format'] = 'sncosmo_source'
                 logger.info("Model is consistent with redback model format. Using simplified model wrapper.")
                 model_end_time = model_kwargs.get('end_time', 400.0)
-                _time_array = np.linspace(0.1, model_end_time, 1000)
+                _time_array = np.linspace(1E-5, model_end_time, 1000)
                 sncosmomodel = self.model(_time_array, **parameters, **model_kwargs)
                 self.sncosmo_model = sncosmomodel
             else:
@@ -1103,6 +1105,44 @@ class SimulateOpticalTransient(object):
         times = overlapping_database['expMJD'].values - t0_transient
         filters = overlapping_database['filter'].values
         magnitude = sncosmo_model.bandmag(phase=times, band=filters, magsys='AB')
+
+        if (self.stacking_interval is not None) & (len(overlapping_database) >= 2):
+            overlapping_database['flux_density'] = redback.utils.calc_flux_density_from_ABmag(magnitude).value
+            overlapping_database_binned = pd.DataFrame()
+            for filter_ in np.unique(filters):
+                mask = filters == filter_
+                pointings = overlapping_database[mask].reset_index(drop=True)
+
+                time_bin = np.zeros(len(times), dtype=int)
+                bin_start = times[0]
+                bin_index = 0
+                for i, time in enumerate(times[1:], start=1):
+                    if time - bin_start < self.stacking_interval:
+                        time_bin[i] = bin_index
+                    else:
+                        bin_index += 1
+                        bin_start = time
+                        time_bin[i] = bin_index
+
+                pointings["time_bin"] = time_bin
+                binned_pointings = pointings.groupby("time_bin", as_index=False).agg(
+                    n_obs=("expMJD", "size"),
+                    expMJD=("expMJD", "mean"),
+                    _ra=("_ra", "mean"),
+                    _dec=("_dec", "mean"),
+                    median_depth=("fiveSigmaDepth","median"),
+                    flux_density=("flux_density", "mean")
+                )
+                binned_pointings['filter'] = filter_
+                binned_pointings['fiveSigmaDepth'] = binned_pointings['median_depth'] + 2.5*np.log10(np.sqrt(binned_pointings['n_obs']))
+                overlapping_database_binned = pd.concat([overlapping_database_binned, binned_pointings], ignore_index=True)
+            print(overlapping_database_binned)
+            overlapping_database_binned = overlapping_database_binned.sort_values(by='expMJD').reset_index(drop=True)
+            times = overlapping_database_binned['expMJD'].values - t0_transient
+            filters = overlapping_database_binned['filter'].values
+            magnitude = redback.utils.calc_ABmag_from_flux_density(overlapping_database_binned['flux_density'].values).value
+            overlapping_database = overlapping_database_binned[['expMJD', '_ra', '_dec', 'filter', 'fiveSigmaDepth']]
+
         flux = redback.utils.bandpass_magnitude_to_flux(magnitude=magnitude, bands=filters)
         ref_flux = redback.utils.bands_to_reference_flux(filters)
         bandflux_errors = redback.utils.bandflux_error_from_limiting_mag(overlapping_database['fiveSigmaDepth'].values,

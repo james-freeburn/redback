@@ -2300,7 +2300,8 @@ def afterglow_models_sed(time, **kwargs):
     lambda_observer_frame = kwargs.get('lambda_array', np.geomspace(100, 60000, 150))
     frequency = lambda_to_nu(lambda_observer_frame)
     max_time = np.maximum(time.max(), 100)
-    time_observer_frame = np.geomspace(0.1, max_time, 100)
+    min_time = np.maximum(time[time>0].min(), 1E-5)
+    time_observer_frame = np.geomspace(min_time, max_time, 100)
     times_mesh, frequency_mesh = np.meshgrid(time_observer_frame, frequency)
     temp_kwargs['frequency'] = frequency_mesh
     temp_kwargs['output_format'] = 'flux_density'
