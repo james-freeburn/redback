@@ -3,6 +3,7 @@ from inspect import isfunction
 from redback.utils import logger, citation_wrapper, calc_ABmag_from_flux_density, lambda_to_nu, bands_to_frequency
 from redback.constants import day_to_s, speed_of_light, solar_mass, proton_mass, electron_mass, sigma_T
 from redback.sed import get_correct_output_format_from_spectra
+import redback.transient_models.extinction_models as em
 import astropy.units as uu
 import numpy as np
 from collections import namedtuple
@@ -25,7 +26,7 @@ jet_spreading_models = ['tophat', 'cocoon', 'gaussian',
                           'kn_afterglow', 'cone_afterglow',
                           'gaussiancore', 'gaussian',
                           'smoothpowerlaw', 'powerlawcore',
-                          'tophat']
+                          'tophat','vegas_tophat']
 
 
 # Physical constants (as module-level constants for Numba)
@@ -2307,6 +2308,13 @@ def afterglow_models_sed(time, **kwargs):
     temp_kwargs['output_format'] = 'flux_density'
     output = function(times_mesh, **temp_kwargs).T
     fmjy = output * uu.mJy
+
+    # correct for host galaxy extinction
+    r_v = kwargs.get('r_v', 3.1)
+    angstroms = lambda_observer_frame
+    fmjy = em._perform_extinction(flux_density=fmjy, angstroms=angstroms, av_host=kwargs.get('av', 0.0), rv_host=r_v,
+                                  **kwargs)
+
     spectra = fmjy.to(uu.erg / uu.cm ** 2 / uu.s / uu.Angstrom,
                      equivalencies=uu.spectral_density(wav=lambda_observer_frame * uu.Angstrom))
     if kwargs['output_format'] == 'spectra':
