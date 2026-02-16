@@ -222,7 +222,10 @@ def vegas_tophat(time, redshift, thv, loge0, thc, lognism, loga, p, logepse, log
         frequency = bands_to_frequency(bands)
     
     # Calculate flux density
-    flux_density_cgs = model.flux_density(time_s, frequency).total
+    if len(np.shape(time_s)) > 1:
+        flux_density_cgs = np.array([model.flux_density(time_arr,band_arr).total for time_arr, band_arr in zip(time_s, frequency)])
+    else:
+        flux_density_cgs = model.flux_density(time_s,frequency).total
     fmjy = flux_density_cgs / 1e-26
     
     # Return based on output_format
