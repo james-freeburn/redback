@@ -1112,11 +1112,11 @@ class SimulateOpticalTransient(object):
             for filter_ in np.unique(filters):
                 mask = filters == filter_
                 pointings = overlapping_database[mask].reset_index(drop=True)
-
-                time_bin = np.zeros(len(times), dtype=int)
-                bin_start = times[0]
+                times_filter = pointings['expMJD'].values - t0_transient
+                time_bin = np.zeros(len(times_filter), dtype=int)
+                bin_start = times_filter[0]
                 bin_index = 0
-                for i, time in enumerate(times[1:], start=1):
+                for i, time in enumerate(times_filter[1:], start=1):
                     if time - bin_start < self.stacking_interval:
                         time_bin[i] = bin_index
                     else:
@@ -1136,7 +1136,6 @@ class SimulateOpticalTransient(object):
                 binned_pointings['filter'] = filter_
                 binned_pointings['fiveSigmaDepth'] = binned_pointings['median_depth'] + 2.5*np.log10(np.sqrt(binned_pointings['n_obs']))
                 overlapping_database_binned = pd.concat([overlapping_database_binned, binned_pointings], ignore_index=True)
-            print(overlapping_database_binned)
             overlapping_database_binned = overlapping_database_binned.sort_values(by='expMJD').reset_index(drop=True)
             times = overlapping_database_binned['expMJD'].values - t0_transient
             filters = overlapping_database_binned['filter'].values
