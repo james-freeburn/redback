@@ -1,4 +1,6 @@
 bands,wavelength [Hz],wavelength [Angstrom],color,reference_flux,sncosmo_name,label,effective_width [Hz]
+argus_g,6.532638e+14,4589.14882,black,8.107894e-07,argus_g,Argus/g,1.882970e+14
+argus_r,4.861986e+14,6166.04945,black,1.506145e-06,argus_r,Argus/r,8.402061e+13
 U,8.36900e+14,3584.78000,black,5.47200e-06,bessellux,Bessell/U,1.52177e+14
 B,6.86300e+14,4371.07000,black,5.53500e-06,bessellb,Bessell/B,1.43098e+14
 V,5.47700e+14,5477.70000,black,3.26400e-06,bessellv,Bessell/V,8.58703e+13
